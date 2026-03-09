@@ -26,6 +26,7 @@ import { DebugLoggerPage } from "@/components/DebugLoggerPage";
 import { AboutPage } from "@/components/AboutPage";
 import { HistoryPage } from "@/components/HistoryPage";
 import type { HistoryItem } from "@/components/FetchHistory";
+import { ConcurrencyWarningDialog } from "@/components/ConcurrencyWarningDialog";
 import { useDownload } from "@/hooks/useDownload";
 import { useMetadata } from "@/hooks/useMetadata";
 import { useLyrics } from "@/hooks/useLyrics";
@@ -586,6 +587,11 @@ function App() {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+            <ConcurrencyWarningDialog
+                open={download.showConcurrencyWarning}
+                onConfirm={download.handleConcurrencyWarningConfirm}
+                onReduceToOne={download.handleConcurrencyWarningReduceToOne}
+            />
         </div>
     </TooltipProvider>);
 }

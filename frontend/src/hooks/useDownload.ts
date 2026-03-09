@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { downloadTrack, fetchSpotifyMetadata } from "@/lib/api";
 import { getSettings, parseTemplate, type TemplateData } from "@/lib/settings";
 import { toastWithSound as toast } from "@/lib/toast-with-sound";
@@ -46,6 +46,49 @@ export function useDownload(region: string) {
     } | null>(null);
     const shouldStopDownloadRef = useRef(false);
     const isPausedRef = useRef(false);
+    const [showConcurrencyWarning, setShowConcurrencyWarning] = useState(false);
+    const concurrencyWarningResolveRef = useRef<((proceed: boolean) => void) | null>(null);
+    const sessionWarningAcknowledgedRef = useRef(false);
+
+    useEffect(() => {
+        const settings = getSettings();
+        const concurrency = settings.concurrentDownloads ?? 3;
+        if (concurrency > 1 && !sessionWarningAcknowledgedRef.current) {
+            setShowConcurrencyWarning(true);
+        }
+        return () => {
+            // Resolve any pending warning promise on unmount to prevent memory leaks
+            if (concurrencyWarningResolveRef.current) {
+                concurrencyWarningResolveRef.current(false);
+                concurrencyWarningResolveRef.current = null;
+            }
+        };
+    }, []);
+
+    const waitForConcurrencyWarning = (): Promise<boolean> => {
+        return new Promise((resolve) => {
+            concurrencyWarningResolveRef.current = resolve;
+            setShowConcurrencyWarning(true);
+        });
+    };
+
+    const handleConcurrencyWarningConfirm = () => {
+        sessionWarningAcknowledgedRef.current = true;
+        setShowConcurrencyWarning(false);
+        if (concurrencyWarningResolveRef.current) {
+            concurrencyWarningResolveRef.current(true);
+            concurrencyWarningResolveRef.current = null;
+        }
+    };
+
+    const handleConcurrencyWarningReduceToOne = () => {
+        setShowConcurrencyWarning(false);
+        if (concurrencyWarningResolveRef.current) {
+            concurrencyWarningResolveRef.current(false);
+            concurrencyWarningResolveRef.current = null;
+        }
+    };
+
     const downloadWithAutoFallback = async (id: string, settings: any, trackName?: string, artistName?: string, albumName?: string, playlistName?: string, position?: number, spotifyId?: string, durationMs?: number, releaseYear?: string, albumArtist?: string, releaseDate?: string, coverUrl?: string, spotifyTrackNumber?: number, spotifyDiscNumber?: number, spotifyTotalTracks?: number, spotifyTotalDiscs?: number, copyright?: string, publisher?: string) => {
         const service = settings.downloader;
         const query = trackName && artistName ? `${trackName} ${artistName} ` : undefined;
@@ -784,6 +827,10 @@ export function useDownload(region: string) {
         }
         logger.info(`starting batch download: ${selectedTracks.length} selected tracks`);
         const settings = getSettings();
+        if (Math.min(Math.max(1, settings.concurrentDownloads || 3), 6) > 1 && !sessionWarningAcknowledgedRef.current) {
+            const proceed = await waitForConcurrencyWarning();
+            if (!proceed) return;
+        }
         setIsDownloading(true);
         setBulkDownloadType("selected");
         setDownloadProgress(0);
@@ -975,6 +1022,10 @@ export function useDownload(region: string) {
         }
         logger.info(`starting batch download: ${tracksWithId.length} tracks`);
         const settings = getSettings();
+        if (Math.min(Math.max(1, settings.concurrentDownloads || 3), 6) > 1 && !sessionWarningAcknowledgedRef.current) {
+            const proceed = await waitForConcurrencyWarning();
+            if (!proceed) return;
+        }
         setIsDownloading(true);
         setBulkDownloadType("all");
         setDownloadProgress(0);
@@ -1188,5 +1239,8 @@ export function useDownload(region: string) {
         handlePauseDownload,
         handleResumeDownload,
         resetDownloadedTracks,
+        showConcurrencyWarning,
+        handleConcurrencyWarningConfirm,
+        handleConcurrencyWarningReduceToOne,
     };
 }

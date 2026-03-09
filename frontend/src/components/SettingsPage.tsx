@@ -12,6 +12,7 @@ import { getSettings, getSettingsWithDefaults, saveSettings, resetToDefaultSetti
 import { themes, applyTheme } from "@/lib/themes";
 import { SelectFolder } from "../../wailsjs/go/main/App";
 import { toastWithSound as toast } from "@/lib/toast-with-sound";
+import { ConcurrencyWarningDialog } from "@/components/ConcurrencyWarningDialog";
 const TidalIcon = ({ className }: {
     className?: string;
 }) => (<svg viewBox="0 0 24 24" className={`inline-block w-[1.1em] h-[1.1em] mr-2 ${className || "fill-muted-foreground"}`}>
@@ -44,6 +45,7 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest, }: Settin
     const [tempSettings, setTempSettings] = useState<SettingsType>(savedSettings);
     const [isDark, setIsDark] = useState(document.documentElement.classList.contains("dark"));
     const [showResetConfirm, setShowResetConfirm] = useState(false);
+    const [showConcurrencyWarning, setShowConcurrencyWarning] = useState(false);
     const hasUnsavedChanges = JSON.stringify(savedSettings) !== JSON.stringify(tempSettings);
     const resetToSaved = useCallback(() => {
         const freshSavedSettings = getSettings();
@@ -716,7 +718,7 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest, }: Settin
                     </TooltipContent>
                   </Tooltip>
                 </div>
-                <Select value={String(tempSettings.concurrentDownloads ?? 3)} onValueChange={(value) => setTempSettings((prev) => ({ ...prev, concurrentDownloads: Number(value) }))}>
+                <Select value={String(tempSettings.concurrentDownloads ?? 3)} onValueChange={(value) => { const num = Number(value); setTempSettings((prev) => ({ ...prev, concurrentDownloads: num })); if (num > 1) setShowConcurrencyWarning(true); }}>
                   <SelectTrigger id="concurrent-downloads" className="w-24">
                     <SelectValue/>
                   </SelectTrigger>
@@ -806,5 +808,10 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest, }: Settin
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <ConcurrencyWarningDialog
+        open={showConcurrencyWarning}
+        onConfirm={() => setShowConcurrencyWarning(false)}
+        onReduceToOne={() => { setTempSettings((prev) => ({ ...prev, concurrentDownloads: 1 })); setShowConcurrencyWarning(false); }}
+      />
     </div>);
 }
